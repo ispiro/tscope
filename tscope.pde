@@ -1,177 +1,148 @@
 /**
  * Tachistoscope
+ * ispiro
  */
-
 import processing.opengl.*;
+import java.util.Map;
 import themidibus.*;
 
+/******************* USEFUL GLOBALS *******************/
 
-String baseURL = "http://localhost/~ispiro/";
-
-boolean local = true;
-boolean ready = false;
-boolean verbose = true;
-boolean randomness = false;
+int myWidth = 1280;
+int myHeight = 960;
 boolean doubleMode = true;
+float shrink = .5;
+int randomDelay = 10000;
+int currentSearch = 30;
 
-int fixedWidth;
-int fixedHeight;
-int screenShift = 640;
-int bufferSize = 30;
+/******************************************************/
 
-ArrayList searches = new ArrayList();
-String statusMessage;
-String searchString;
-boolean newSearch, recording, playback, filling;
-
-
-int ks[] = new int[8];
-int sequence[];
-int step = 0;
-int sequenceLength = 0;
-int maxSequenceLength = 64;
-
-int currentImage = 0;
-int currentSearch = 0;
-int currentBufferSize = 0;
 int frameSpeed = 10;
-int tintHue;
-int colorSetting = 1;
+int brightness = 255;
+int opacity = 1;
+int imageSaturation = 255;
+int currentImage = 0;
+int bufferSize = 30;
+int loopSize = 30;
+int bufferOffset = 0;
+int tintHue = 0;
+int tintAmount = 255;
+int count = 0;
+int freezeImage = -1;
 int attempt = 0;
 int lastTime;
-int randomDelay = 40000;
-int freezeImage = -1;
-int imageSaturation = 255;
+int lastBuffer = 0;
+int nextSet = -1;
+
+String statusMessage;
+String searchString;
+
 float statusCount = 0;
-float shrink = .5;
 float randomFrame;
-int imageWidth;
 
-float aspect;
-float displayWidth;
-float displayHeight;
+boolean newSearch;
+boolean verbose = true;
+boolean randomness = true;
+boolean updateSpeed = false;
+boolean ready = false;
+boolean filling = false;
 
+HashMap<String, String[]> images;
+ArrayList searches;
 PFont font;
-PImage buffers[][] = new PImage[bufferSize][100];
-PImage buffer[] = new PImage[bufferSize];
+PImage buffer[] = new PImage[100];
 PImage grays[] = new PImage[100];
-PImage gray;
+MidiBus myBus;
 
-MidiBus myBus; 
+/******************* SETUP *******************/
 
 void setup() {
-  
-  int theWidth = (int)(screen.width * shrink);
-  int theHeight = (int)(screen.height * shrink);
-
-  if (fixedWidth != 0 && fixedHeight != 0) {
-    theWidth = fixedWidth;
-    theHeight = fixedHeight;
-  }
-  imageWidth = theWidth;
-  if (doubleMode) {
-    theWidth *= 2;
-  }
-  size(theWidth, theHeight, OPENGL);
-
-  colorMode(HSB);
-  frameRate(frameSpeed);
-
   loadCachedSearches();
   lastTime = millis();
+  int windowWidth = myWidth;
+  if (doubleMode) {
+    windowWidth = myWidth + myWidth/4;
+  }
+  size((int)(windowWidth), (int)(myHeight), OPENGL);
+  if (doubleMode) {
+    frame.setLocation(1680-myWidth/4, -20);
+  }
+  colorMode(HSB);
+  frameRate(frameSpeed);
+  doRandomStuff(true);
 
   myBus = new MidiBus(this, 0, 1);
-
   font = loadFont("CourierNew36.vlw"); 
   textFont(font, 32); 
-
   fillBuffer();
-  getParent().setLocation(screenShift, 0);
 }
 
-void drawTexture(PImage textureImage, int sr) {
-  beginShape();
-  texture(textureImage);
-  vertex(sr+ks[0], ks[1], 0, 0);
-  vertex(sr+displayWidth+ks[2], ks[3], textureImage.width, 0);
-  vertex(sr+displayWidth+ks[4], displayHeight+ks[5], textureImage.width, textureImage.height);
-  vertex(sr+ks[6], displayHeight+ks[7], 0, textureImage.height);
-  endShape();
+
+void initFrame() {
+  frame.removeNotify();
+  frame.setUndecorated(true);
+  frame.addNotify();
 }
+
+
+void drawTexture(PImage img) {
+  float displayWidth;
+  float displayHeight;
+  float aspect = (float)img.width/(float)  img.height;
+  displayWidth = aspect * height;
+  displayHeight = height;
+
+  if (myWidth > width) {
+    displayWidth = myWidth;
+    displayHeight = width/aspect;
+  }
+
+  if (doubleMode) {
+    int startX = (int)((myWidth/4 - displayWidth/4) / 2);
+    image(img, startX, 0, displayWidth/4, displayHeight/4);
+    startX = myWidth/4 + abs((int)((displayWidth - myWidth) / 2));   
+    image(img, startX, 0, displayWidth, displayHeight);
+  } 
+  else {
+    int startX = (int)((myWidth - displayWidth) / 2);
+    image(img, startX, 0, displayWidth, displayHeight);
+  }
+}
+
 
 void draw() {
 
+  if (updateSpeed) {
+    frameRate(frameSpeed);
+    setStatus("FPS " + frameSpeed);
+    updateSpeed = false;
+  }
+
   updateBuffer();
+  doRandomStuff(false);
   background(0);
 
   if (!ready) return;
 
-  aspect = (float)buffer[currentImage].width/(float)  buffer[currentImage].height;
-  displayWidth = aspect * buffer[currentImage].height;
-  displayHeight = buffer[currentImage].height;
-
-  if (displayWidth > buffer[currentImage].width) {
-    displayWidth = buffer[currentImage].width;
-    displayHeight = buffer[currentImage].width/aspect;
-  }
-
-  float startX = (imageWidth - displayWidth) / 2;
-  startX = 0;
-
-  if (playback) {
-    currentImage = sequence[step];
-    step++;
-    step = step % sequenceLength;
-  }
-
-  if (freezeImage != -1) {
-    currentImage = freezeImage;
-  }
-
-  PImage textureImage = buffer[currentImage];
-
-  if (colorSetting == 0) {
-    background(0);
-    tint(0, 0, 255, 255);
-    gray = grays[currentImage];
-    /*beginShape();
-     texture(gray);
-     vertex(ks[0],ks[1],0,0);
-     vertex(displayWidth+ks[2],ks[3],gray.width,0);
-     vertex(displayWidth+ks[4],displayHeight+ks[5],gray.width,gray.height);
-     vertex(ks[6],displayHeight+ks[7],0,gray.height);
-     endShape();*/
-    tint(0, 0, 255, imageSaturation);
-  } 
-  else if (colorSetting == 1) {
-
+  int theTint = tintHue;
+  if (tintHue == 0) {
     float milli = millis();
-    float milliNoise = noise(milli*.0001) * 2 * (noise(milli) - .5);
-
-    tintHue = (int)(abs(milliNoise) * 2 * 360.0);
-    if (random(0, 2) < 1) { 
-      tint(tintHue, imageSaturation, 255);
-    } 
-    else {
-      tint(0, 0, 255);
-    }
-
-    textureImage = grays[currentImage];
-  } 
-  else if (colorSetting == 2) {
-    tint(tintHue, 0, 255);
-    textureImage = grays[currentImage];
+    float milliNoise = noise(milli*.0001) * 2 * (noise(milli) - .5); 
+    theTint = (int)(abs(milliNoise) * 2 * 360.0);
   }
 
-  drawTexture(textureImage, 0);
+  tint(theTint, tintAmount, brightness);
+  drawTexture(buffer[currentImage]);
 
-  if (doubleMode) {
-    drawTexture(textureImage, imageWidth);
-  }
+  tint(theTint, tintAmount, brightness, imageSaturation);
+  drawTexture(grays[currentImage]);
 
-  currentImage++;
-  if (currentImage >= bufferSize) {
-    currentImage = 0;
+  count++;
+  currentImage = count + bufferOffset;
+
+  currentImage = bufferOffset + ((count + bufferOffset) % loopSize);
+  while (currentImage >= bufferSize) {
+    currentImage -= bufferSize;
   }
 
   if (statusCount > 0) {
@@ -182,44 +153,31 @@ void draw() {
     }
   }
 }
+
+
 void setStatus(String stat) {
   setStatus(stat, false);
 }
+
 void setStatus(String stat, boolean slow) {
   statusMessage = stat;
   if (slow) statusCount =  200;
   else statusCount = 20;
 }
 
-void keyPressed() {
+/******************* KEYBOARD *******************/
 
-  if (recording) {
-    if (key == 'r') {
-      recording = false;
-      if (step != 0) {
-        playback = true;
-      }
-      setStatus("");
-    }
-    return;
-  }
+void keyPressed() {
 
   if (newSearch) {
     if (keyCode == ENTER) {
-      if (searchString.length() > 0) {
-        searches.add(searchString);
-        currentSearch = searches.size() - 1;
-        fillBuffer();
-      }
       newSearch = false;
       setStatus("Searching...");
       return;
     }
-
     if (keyCode == BACKSPACE && searchString.length() > 0) {
       searchString = searchString.substring(0, searchString.length()-1);
     }
-
     if (((key>='a')&&(key<='z')) || ((key>='0')&&(key<='9')) || key==' ') {
       searchString += key;
     }
@@ -233,26 +191,17 @@ void keyPressed() {
     else setStatus("Verbose off");
   }
 
-  if (key == ' ') {
-    setStatus("Next"); 
-    currentSearch++;// = (int)random(0, searches.size()-1);
-    println("Searching " + currentSearch);
-    if (currentSearch >= searches.size()) {
-      currentSearch = 0;
-    }
-    updateSearches();
-    fillBuffer();
-  }
-
-  if (key == '6') {
+  if (key == 'n') {
     setStatus("Next"); 
     currentSearch++;
-
-    if (currentSearch >= searches.size()) {
+    if (currentSearch >= images.size()) {
       currentSearch = 0;
     }
-    updateSearches();
     fillBuffer();
+  }
+  
+   if (key == ' ') {
+    doRandomStuff(true);
   }
 
   if (key == '=') {
@@ -273,23 +222,10 @@ void keyPressed() {
     }
   }
 
-  if (key == 'c') {
-    colorSetting++;
-    if (colorSetting > 1) colorSetting = 0;
-    if (colorSetting == 0) setStatus("Color"); 
-    if (colorSetting == 1) setStatus("Hue Shifter"); 
-    if (colorSetting == 2) setStatus("Grayscale");
-  }
-
-  if (key == 'r') {
+  if (key == 'm') {
     randomness = !randomness;
     if (randomness) setStatus("Random"); 
     if (!randomness) setStatus("Normal");
-  }
-
-  if (key == 'p') {
-    playback = !playback;
-    setStatus("Playback: " + playback);
   }
 
   if (key == 's') {
@@ -297,21 +233,11 @@ void keyPressed() {
     searchString = "";
     setStatus("Search: ", true);
   }
-
+  
   if (key == 'r') {
-    recording = true;
-    sequence = new int[maxSequenceLength];
-    step = 0;
-    setStatus("Recording", true);
-  }
-
-  if (key == 'd') {
-    doubleMode = !doubleMode;
-    setStatus("Double: " + doubleMode);
+    randomizeBuffer();
   }
 }
-
-
 
 
 void doRandomStuff(boolean force) {
@@ -322,104 +248,85 @@ void doRandomStuff(boolean force) {
 
   if (randomDelay != 0 && elapsed > randomDelay) {
     lastTime = millis(); 
-
-    currentSearch = (int)random(0, searches.size()-1);
-    if (currentSearch >= searches.size()) {
+    imageSaturation = 127 + (int)random(227);
+    tintHue = (int)random(255);
+    tintAmount = (int)random(255);
+    
+    if (random(10) > 5) {
+     tintHue = 0;
+     imageSaturation = 255;
+     tintAmount = 255; 
+    }
+    
+    currentSearch = (int)random(0,searches.size()-2);
+    if (currentSearch >= images.size()) {
       currentSearch = 0;
     }
-    updateSearches();
+
     fillBuffer(); 
 
-    colorSetting = 1;
-
-    frameSpeed = (int) random(15, 50);
+    frameSpeed = (int) random(5, 40);
     frameRate(frameSpeed);
     if (verbose) setStatus("FPS " + frameSpeed);
-  }
-  float longDelayChance = .0025;
-  if (longDelayChance > 0 && random(1.0)/longDelayChance < 1) {
-    delay(int(random(1000, 3000)));
   }
 }
 
 
 
 void loadCachedSearches() {
+  searches = new ArrayList();
+  images = new HashMap<String, String[]>();
+
   File file = new File(sketchPath + "/cache");
   if (file.isDirectory()) {
     String names[] = file.list();
     for (int i = 0; i < names.length; i++) {
       if (!names[i].substring(0, 1).equals(".")) {
-        searches.add(names[i]);
+        File subdir = new File(sketchPath + "/cache/" + names[i]);
+        if (subdir.isDirectory()) {
+          searches.add(names[i]);
+          images.put(names[i], subdir.list());
+        }
       }
     }
-  } 
+  }
+  println(images);
   println(searches);
-}
-
-
-void updateSearches() {
-
-  if (local) return;
-  String searchLines[] = loadStrings(baseURL + "list.php");
-
-  if (searchLines.length == searches.size()) return;
-  searches = new ArrayList();
-  for (int i = 0; i < searchLines.length; i++) {
-    searches.add(searchLines[i]);
-  }        
-  currentSearch = 0;
 }
 
 
 void fillBuffer() {
   attempt = 0;
-  lines = null;
   lastBuffer = 0;
   filling = true;
 }
 
-
-int lastBuffer = 0;
-String lines[];
+PImage img;
+PImage cp;
 
 void updateBuffer() {
 
-  if (lastBuffer >= 30) {
+  String search = (String)searches.get(currentSearch);
+  String[] ims = images.get(search);
+
+  if (lastBuffer >= ims.length) {
+    bufferSize = ims.length;
     lastBuffer = 0;
     filling = false; 
     ready = true;
   }  
 
   if (!filling) return;
-
+  
   while (true) {
     attempt++;
-    String fname = "cache/" + searches.get(currentSearch) + "/" + lastBuffer + ".jpg";
-    PImage img = loadImage(fname);
+
+    String fname = "cache/" + search + "/" + ims[lastBuffer];
+    img = loadImage(fname);
     if (img != null) {
+      buffer[lastBuffer] = img;
 
-      float aspect;
-      int displayWidth;
-      int displayHeight;
-      aspect = (float)img.width/(float)img.height;
-      displayWidth = (int)(aspect * (float)img.height);
-      displayHeight = img.height;
-
-      if (displayWidth > img.width) {
-        displayWidth = img.width;
-        displayHeight =(int)((float)img.height/aspect);
-      }
-
-      float newAspect = (float)displayWidth / (float)displayHeight;
-      int newW = (int)((float)height * aspect);
-      float startX = (imageWidth-newW) / 2.0;
-      PImage padImage = new PImage(imageWidth, height);
-      padImage.copy(img, 0, 0, img.width, img.height, (int)startX, 0, newW, height);
-
-      buffer[lastBuffer] = padImage;
-
-      PImage cp = padImage.get();
+      cp = img.get();
       cp.filter(GRAY);
       grays[lastBuffer] = cp;
 
@@ -427,33 +334,32 @@ void updateBuffer() {
       lastBuffer++;
       return;
     }
-
-    //if ((attempt %4) == 0 || lines == null) {
-    //  int start = attempt;
-    //  lines = loadStrings(baseURL + "index.php?query=" + searches.get(currentSearch) + "&start=" + start);
-    //}
-
-    PGraphics pg;
-    int i = lastBuffer % 4;
-
-    fname = "cache/" + searches.get(currentSearch) + "/" + lastBuffer + ".jpg";
-    img = loadImage(lines[i]);   
-
-    if (img != null && img.width > 0 && img.height > 0) {
-      pg = createGraphics(img.width, img.height, P3D);
-      pg.beginDraw();
-      pg.background(255);
-      pg.image(img, 0, 0, img.width, img.height); 
-      pg.endDraw();
-      pg.save(fname);
-      buffer[lastBuffer] = img;
-      lastBuffer++;
-      return;
-    }
   }
 }
 
 
+
+void randomizeBuffer() {
+
+  for (int i = 0; i < 32; i++) {
+    int rs = (int)random(searches.size());
+    String search = (String)searches.get(rs);
+    String[] ims = images.get(search);
+    int ri =  (int)random(ims.length);
+    String fname = "cache/" + search + "/" + ims[ri];
+    img = loadImage(fname);
+    if (img != null) {
+      buffer[i] = img;
+      cp = img.get();
+      cp.filter(GRAY);
+      grays[i] = cp;
+      println("Randomized " + fname);
+    }
+  }
+  bufferSize = 32;
+}
+
+/******************* MIDI SUPPORT *******************/
 
 void noteOn(int channel, int pitch, int velocity) {
   // Receive a noteOn
@@ -464,14 +370,9 @@ void noteOn(int channel, int pitch, int velocity) {
   println("Pitch:"+pitch);
   println("Velocity:"+velocity);
 
-  freezeImage = pitch % buffers.length;
-
-  if (recording) {
-    sequence[step] = freezeImage;
-    step++;
-    sequenceLength = step;
-    println(sequence);
-  }
+  freezeImage = pitch % buffer.length;
+  opacity = (int)(velocity * 2);
+  if (opacity > 255) opacity = 255;
 }
 
 void noteOff(int channel, int pitch, int velocity) {
@@ -483,6 +384,11 @@ void noteOff(int channel, int pitch, int velocity) {
   println("Pitch:"+pitch);
   println("Velocity:"+velocity);
   freezeImage = -1;
+  
+  if (pitch == 120) {
+    randomizeBuffer();
+  }
+  
 }
 
 void controllerChange(int channel, int number, int value) {
@@ -493,13 +399,37 @@ void controllerChange(int channel, int number, int value) {
   println("Channel:"+channel);
   println("Number:"+number);
   println("Value:"+value);
-  if (number == 1) {
-    frameSpeed = value / 2+ 1;
-    frameRate(frameSpeed);
-    setStatus("FPS " + frameSpeed);
+  if (number == 7) {
+    frameSpeed = (int)(value * .66) + 1;
+    updateSpeed = true;
   } 
-  else if (number == 7) {
-    imageSaturation = value * 2;
+  else if (number == 73) {
+    imageSaturation = (256- (value * 2));
+  } 
+  else if (number == 71) {
+    brightness = value * 2;
+  }  
+  else if (number == 72) {
+    tintAmount = value * 2;
+  } 
+  else if (number == 74) {
+    tintHue = value * 2;
+  } 
+  else if (number == 5) {
+    loopSize = 1 + (int) (value  / 4);
+    println(loopSize);
+  } 
+  else if (number == 84) {
+    bufferOffset = (int) (value  / 4);
+  }
+  else if (number == 93) {
+    currentSearch = value;
+    fillBuffer();
+  }
+  else if (number == 10) {
+    currentSearch = 128 + value;
+    if (currentSearch >= searches.size()) currentSearch = searches.size() - 1;
+    fillBuffer();
   }
 }
 
