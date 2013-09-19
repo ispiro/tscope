@@ -8,11 +8,12 @@ import themidibus.*;
 
 /******************* USEFUL GLOBALS *******************/
 
+int masterWidth = 1680;
 int myWidth = 1280;
-int myHeight = 960;
+int myHeight = 740;
 boolean doubleMode = true;
-float shrink = .5;
-int randomDelay = 10000;
+float previewScale = 0.25;
+int randomDelay = 0;
 int currentSearch = 30;
 
 /******************************************************/
@@ -33,7 +34,7 @@ int attempt = 0;
 int lastTime;
 int lastBuffer = 0;
 int nextSet = -1;
-
+int previewWidth;
 String statusMessage;
 String searchString;
 
@@ -42,7 +43,7 @@ float randomFrame;
 
 boolean newSearch;
 boolean verbose = true;
-boolean randomness = true;
+boolean randomness = false;
 boolean updateSpeed = false;
 boolean ready = false;
 boolean filling = false;
@@ -61,11 +62,12 @@ void setup() {
   lastTime = millis();
   int windowWidth = myWidth;
   if (doubleMode) {
-    windowWidth = myWidth + myWidth/4;
+    previewWidth = (int)(myWidth * previewScale);
+    windowWidth = myWidth + previewWidth;
   }
   size((int)(windowWidth), (int)(myHeight), OPENGL);
   if (doubleMode) {
-    frame.setLocation(1680-myWidth/4, -20);
+    frame.setLocation(masterWidth-previewWidth, -20);
   }
   colorMode(HSB);
   frameRate(frameSpeed);
@@ -92,16 +94,17 @@ void drawTexture(PImage img) {
   displayWidth = aspect * height;
   displayHeight = height;
 
-  if (myWidth > width) {
+  if (displayWidth > myWidth) {
     displayWidth = myWidth;
-    displayHeight = width/aspect;
+    //displayHeight = myWidth/aspect;
   }
 
   if (doubleMode) {
-    int startX = (int)((myWidth/4 - displayWidth/4) / 2);
-    image(img, startX, 0, displayWidth/4, displayHeight/4);
-    startX = myWidth/4 + abs((int)((displayWidth - myWidth) / 2));   
+    int startX = (int)(myWidth*previewScale) + abs((int)((displayWidth - myWidth) / 2));   
     image(img, startX, 0, displayWidth, displayHeight);
+    
+    startX = (int)((myWidth*previewScale - displayWidth*previewScale) / 2);
+    image(img, startX, 0, displayWidth * previewScale, displayHeight*previewScale);
   } 
   else {
     int startX = (int)((myWidth - displayWidth) / 2);
@@ -114,7 +117,6 @@ void draw() {
 
   if (updateSpeed) {
     frameRate(frameSpeed);
-    setStatus("FPS " + frameSpeed);
     updateSpeed = false;
   }
 
@@ -131,11 +133,20 @@ void draw() {
     theTint = (int)(abs(milliNoise) * 2 * 360.0);
   }
 
-  tint(theTint, tintAmount, brightness);
-  drawTexture(buffer[currentImage]);
+ 
+  if (freezeImage != -1) {  
+    tint(theTint, tintAmount, brightness);
+    drawTexture(buffer[freezeImage]);
+    tint(theTint, tintAmount, brightness, imageSaturation);
+    drawTexture(grays[freezeImage]);
 
-  tint(theTint, tintAmount, brightness, imageSaturation);
-  drawTexture(grays[currentImage]);
+  } else {
+    tint(theTint, tintAmount, brightness);
+    drawTexture(buffer[currentImage]);
+    tint(theTint, tintAmount, brightness, imageSaturation);
+    drawTexture(grays[currentImage]);
+
+  }
 
   count++;
   currentImage = count + bufferOffset;
@@ -148,8 +159,18 @@ void draw() {
   if (statusCount > 0) {
     statusCount-= (10.0 / frameSpeed);
     if (verbose || statusMessage == "Verbose off") {
+      fill(255, 0, 0, 255 * (statusCount / 20.0));
+      text(statusMessage, 50-2, 50);
+      fill(255, 0, 0, 255 * (statusCount / 20.0));
+      text(statusMessage, 50+2, 50);
+      fill(255, 0, 0, 255 * (statusCount / 20.0));
+      text(statusMessage, 50, 50+2);
+      fill(255, 0, 0, 255 * (statusCount / 20.0));
+      text(statusMessage, 50, 50-2);
+      
       fill(70, 255, 255, 255 * (statusCount / 20.0));
       text(statusMessage, 50, 50);
+
     }
   }
 }
@@ -224,8 +245,12 @@ void keyPressed() {
 
   if (key == 'm') {
     randomness = !randomness;
-    if (randomness) setStatus("Random"); 
-    if (!randomness) setStatus("Normal");
+    if (randomness) {
+      randomDelay = 10000;
+    } else {
+      randomDelay = 0; 
+    }    
+    setStatus("Rnd " + randomDelay); 
   }
 
   if (key == 's') {
@@ -242,7 +267,7 @@ void keyPressed() {
 
 void doRandomStuff(boolean force) {
 
-  if (!randomness) return;
+  if (randomDelay == 0) return;
 
   int elapsed = millis() - lastTime;  
 
@@ -385,9 +410,9 @@ void noteOff(int channel, int pitch, int velocity) {
   println("Velocity:"+velocity);
   freezeImage = -1;
   
-  if (pitch == 120) {
-    randomizeBuffer();
-  }
+  //if (pitch == 120) {
+  //  randomizeBuffer();
+  //}
   
 }
 
@@ -402,34 +427,55 @@ void controllerChange(int channel, int number, int value) {
   if (number == 7) {
     frameSpeed = (int)(value * .66) + 1;
     updateSpeed = true;
+    setStatus("FPS " + frameSpeed);
   } 
   else if (number == 73) {
     imageSaturation = (256- (value * 2));
+    setStatus("Sat " + (value * 2));
   } 
   else if (number == 71) {
     brightness = value * 2;
+    setStatus("Lum " + brightness);
   }  
   else if (number == 72) {
     tintAmount = value * 2;
+    setStatus("Tin " + tintAmount);
   } 
   else if (number == 74) {
     tintHue = value * 2;
+    setStatus("Hue " + tintHue);
   } 
   else if (number == 5) {
     loopSize = 1 + (int) (value  / 4);
-    println(loopSize);
+    setStatus("Len " + loopSize);
+  } 
+  else if (number == 1) {    
+    randomDelay = 0;
+    if (value != 0) randomDelay = (15000 - (value * 100));
+    setStatus("Rnd " + value);
   } 
   else if (number == 84) {
     bufferOffset = (int) (value  / 4);
+    setStatus("Off " + bufferOffset);
   }
   else if (number == 93) {
     currentSearch = value;
     fillBuffer();
+    String search = (String)searches.get(currentSearch);
+    if (search.length() > 13) {
+      search = search.substring(0,10) + "...";
+    }
+    setStatus(search);
   }
   else if (number == 10) {
     currentSearch = 128 + value;
     if (currentSearch >= searches.size()) currentSearch = searches.size() - 1;
     fillBuffer();
+    String search = (String)searches.get(currentSearch);
+    if (search.length() > 13) {
+      search = search.substring(0,10) + "...";
+    }
+    setStatus(search);
   }
 }
 
