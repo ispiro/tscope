@@ -37,6 +37,7 @@ int nextSet = -1;
 int previewWidth;
 String statusMessage;
 String searchString;
+String search;
 
 float statusCount = 0;
 float randomFrame;
@@ -190,7 +191,7 @@ void setStatus(String stat, boolean slow) {
 
 void keyPressed() {
 
-  if (newSearch) {
+  /*if (newSearch) {
     if (keyCode == ENTER) {
       newSearch = false;
       setStatus("Searching...");
@@ -204,8 +205,8 @@ void keyPressed() {
     }
     setStatus("Search: " + searchString, true);
     return;
-  }
-
+  }*/
+  
   if (key == 'v') {
     verbose = !verbose;
     if (verbose) setStatus("Verbose on");
@@ -254,9 +255,15 @@ void keyPressed() {
   }
 
   if (key == 's') {
-    newSearch = true;
-    searchString = "";
-    setStatus("Search: ", true);
+    //newSearch = true;
+    //searchString = "";
+    //setStatus("Search: ", true);
+    
+    String lines[] = loadStrings("http://localhost:8888/list.php");
+    print(lines[0]);
+    search = lines[0];
+    fillBuffer();
+
   }
   
   if (key == 'r') {
@@ -284,6 +291,8 @@ void doRandomStuff(boolean force) {
     }
     
     currentSearch = (int)random(0,searches.size()-2);
+      search = (String)searches.get(currentSearch);
+
     if (currentSearch >= images.size()) {
       currentSearch = 0;
     }
@@ -315,6 +324,7 @@ void loadCachedSearches() {
       }
     }
   }
+  search = (String)searches.get(0);
   println(images);
   println(searches);
 }
@@ -331,7 +341,7 @@ PImage cp;
 
 void updateBuffer() {
 
-  String search = (String)searches.get(currentSearch);
+  //search = (String)searches.get(currentSearch);
   String[] ims = images.get(search);
 
   if (lastBuffer >= ims.length) {
@@ -461,21 +471,23 @@ void controllerChange(int channel, int number, int value) {
   else if (number == 93) {
     currentSearch = value;
     fillBuffer();
-    String search = (String)searches.get(currentSearch);
+     search = (String)searches.get(currentSearch);
     if (search.length() > 13) {
-      search = search.substring(0,10) + "...";
+      setStatus(search.substring(0,10) + "...");
+    } else {
+      setStatus(search);
     }
-    setStatus(search);
   }
   else if (number == 10) {
     currentSearch = 128 + value;
     if (currentSearch >= searches.size()) currentSearch = searches.size() - 1;
     fillBuffer();
-    String search = (String)searches.get(currentSearch);
+     search = (String)searches.get(currentSearch);
     if (search.length() > 13) {
-      search = search.substring(0,10) + "...";
-    }
+      setStatus(search.substring(0,10) + "...");
+    } else {
     setStatus(search);
+    }
   }
 }
 
