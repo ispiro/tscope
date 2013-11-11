@@ -11,7 +11,7 @@ import themidibus.*;
 int masterWidth = 1680;
 int myWidth = 1280;
 int myHeight = 740;
-boolean doubleMode = true;
+boolean doubleMode = false;
 float previewScale = 0.25;
 int randomDelay = 0;
 int currentSearch = 30;
@@ -27,7 +27,7 @@ int bufferSize = 30;
 int loopSize = 30;
 int bufferOffset = 0;
 int tintHue = 0;
-int tintAmount = 255;
+int tintAmount = 0;
 int count = 0;
 int freezeImage = -1;
 int attempt = 0;
@@ -35,6 +35,9 @@ int lastTime;
 int lastBuffer = 0;
 int nextSet = -1;
 int previewWidth;
+int kernelSize = 1;
+int[] kernel = {200, 160, 140, 120, 100, 80, 60};
+
 String statusMessage;
 String searchString;
 String search;
@@ -142,13 +145,29 @@ void draw() {
     drawTexture(grays[freezeImage]);
 
   } else {
-    tint(theTint, tintAmount, brightness);
-    drawTexture(buffer[currentImage]);
-    tint(theTint, tintAmount, brightness, imageSaturation);
-    drawTexture(grays[currentImage]);
+    if (kernelSize == 1) {
+      tint(theTint, tintAmount, brightness);
+      drawTexture(buffer[currentImage]);
+      tint(theTint, tintAmount, brightness, imageSaturation);
+      drawTexture(grays[currentImage]);
+    } else {
+      
+      
+    for (int d = 0; d < kernelSize; d++) {
+    
+      int pos = currentImage + d;
+      while (pos >= bufferSize) {
+        pos -= bufferSize;
+      }
 
+      //tint(theTint, tintAmount, brightness, kernel[d]);
+      //drawTexture(buffer[pos]);
+      tint(theTint, tintAmount, brightness, kernel[d]);
+      drawTexture(grays[pos]);
+    
+    }
   }
-
+  }
   count++;
   currentImage = count + bufferOffset;
 
@@ -213,17 +232,22 @@ void keyPressed() {
     else setStatus("Verbose off");
   }
 
-  if (key == 'n') {
-    setStatus("Next"); 
+  if (key == ' ') {
+
     currentSearch++;
     if (currentSearch >= images.size()) {
       currentSearch = 0;
     }
+
     fillBuffer();
-  }
-  
-   if (key == ' ') {
-    doRandomStuff(true);
+    search = (String)searches.get(currentSearch);
+    if (search.length() > 13) {
+      setStatus(search.substring(0,10) + "...");
+    } else {
+      setStatus(search);
+    }
+
+    fillBuffer();
   }
 
   if (key == '=') {
@@ -243,6 +267,16 @@ void keyPressed() {
       setStatus("FPS " + frameSpeed);
     }
   }
+  int k2[];
+  if (key == 'k') {
+    kernelSize+=2;
+    if (kernelSize > 7) {
+      kernelSize = 1;
+    }
+   
+    setStatus("Blur " + kernelSize);
+
+   }
 
   if (key == 'm') {
     randomness = !randomness;
