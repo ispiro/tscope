@@ -5,10 +5,14 @@ class TInput {
   MidiBus myBus;
   TOptions t;
   int[] midiOverrides = new int[10];
-
+  PrintWriter output;
   TInput(processing.core.PApplet parent, TOptions options) {
     this.t = options;
     myBus = new MidiBus(parent, 0, 1);
+    
+     output = createWriter("save.txt"); 
+    
+    
   }
 
 
@@ -124,16 +128,19 @@ class TInput {
 
     void noteOn(int channel, int pitch, int velocity) {
       // Receive a noteOn
-      println();
-      println("Note On:");
-      println("--------");
-      println("Channel:"+channel);
-      println("Pitch:"+pitch);
-      println("Velocity:"+velocity);
+     if (pitch == 119) {
+       output.println("   " + searches.get(currentSearch));
+        output.flush();
+     } 
+     
+     if (pitch == 120) {
+       output.println("*  " + searches.get(currentSearch));
+      output.flush();  
+   }
 
-      freezeImage = pitch % buffer.length;
-      t.opacity = (int)(velocity * 2);
-      if (t.opacity > 255) t.opacity = 255;
+      //freezeImage = pitch % buffer.length;
+      //t.opacity = (int)(velocity * 2);
+      //if (t.opacity > 255) t.opacity = 255;
     }
 
     void noteOff(int channel, int pitch, int velocity) {

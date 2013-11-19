@@ -16,7 +16,7 @@ class TOptions {
   int tintHue =          0;
   int tintAmount =       0;
   int kernelSize =       1;
-  int[] kernel =         {200, 160, 140, 120, 100, 80, 60};
+  int[] kernel =         {40, 100, 160, 100, 40, 20, 10};
   boolean verbose =      true;
   boolean randomness =   false;
 

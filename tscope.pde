@@ -139,8 +139,8 @@ void draw() {
         pos -= t.bufferSize;
       }
 
-      //tint(theTint, t.tintAmount, t.brightness, t.kernel[d]);
-      //drawTexture(buffer[pos]);
+      tint(theTint, t.tintAmount, t.brightness, t.kernel[d]);
+      drawTexture(buffer[pos]);
       tint(theTint, t.tintAmount, t.brightness, t.kernel[d]);
       drawTexture(grays[pos]);
     
@@ -319,4 +319,38 @@ void exportGif() {
   framesToExport = t.loopSize;
 }
 
+    void noteOn(int channel, int pitch, int velocity) {
+      in.noteOn(channel, pitch, velocity);
+
+      println();
+      println("Note On:");
+      println("--------");
+      println("Channel:"+channel);
+      println("Pitch:"+pitch);
+      println("Velocity:"+velocity);
+    }
+
+    void noteOff(int channel, int pitch, int velocity) {
+      in.noteOn(channel, pitch, velocity);
+      // Receive a noteOff
+      println();
+      println("Note Off:");
+      println("--------");
+      println("Channel:"+channel);
+      println("Pitch:"+pitch);
+      println("Velocity:"+velocity);
+    }
+
+    void controllerChange(int channel, int number, int value) {
+      
+      in.controllerChange(channel, number, value);
+
+      // Receive a controllerChange
+      println();
+      println("Controller Change:");
+      println("--------");
+      println("Channel:"+channel);
+      println("Number:"+number);
+      println("Value:"+value);
+    }
 
