@@ -4,6 +4,7 @@
  */
 import processing.opengl.*;
 import java.util.Map;
+import gifAnimation.*;
 
 /******************* GLOBALS *******************/
 
@@ -16,6 +17,7 @@ int lastTime;
 int lastBuffer = 0;
 int nextSet = -1;
 int previewWidth;
+int framesToExport = -1;
 
 String statusMessage;
 String searchString;
@@ -34,6 +36,8 @@ ArrayList searches;
 PFont font;
 PImage buffer[] = new PImage[100];
 PImage grays[] = new PImage[100];
+
+GifMaker gifExport;
 
 TOptions t;
 TInput in;
@@ -168,6 +172,22 @@ void draw() {
 
     }
   }
+  
+  
+  if (framesToExport > 0) {
+    int delay = int(1000.0 / t.frameSpeed);
+    int frame = t.loopSize - framesToExport;
+    gifExport.setDelay(delay);
+    gifExport.addFrame(); 
+    println("Added frame " + frame + " to GIF");
+    framesToExport--;  
+  } else if (framesToExport == 0) {
+    gifExport.finish(); 
+    println("Done exporting GIF");
+    framesToExport = -1;
+  }
+  
+  
 }
 
 
@@ -290,4 +310,13 @@ void randomizeBuffer() {
   }
   t.bufferSize = 32;
 }
+
+
+
+void exportGif() {
+  gifExport = new GifMaker(this, "test.gif");
+  gifExport.setRepeat(0);
+  framesToExport = t.loopSize;
+}
+
 
